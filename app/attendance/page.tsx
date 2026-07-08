@@ -123,7 +123,7 @@ export default function AttendancePage() {
           
           <div className="flex flex-col">
             <label className="text-xs font-bold text-gray-500 mb-1">SELECT BATCH / CLASS</label>
-            <select 
+            <select title="select"
               className="bg-gray-50 border border-gray-200 p-3 rounded-lg outline-none font-bold text-gray-700"
               value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}
             >
@@ -137,7 +137,7 @@ export default function AttendancePage() {
 
           <div className="flex flex-col">
             <label className="text-xs font-bold text-blue-600 mb-1">SELECT MEDIUM</label>
-            <select 
+           <select title="select"
               className="bg-blue-50 border border-blue-200 p-3 rounded-lg outline-none font-bold text-blue-800"
               value={selectedMedium} onChange={(e) => setSelectedMedium(e.target.value)}
             >
@@ -149,7 +149,7 @@ export default function AttendancePage() {
 
           <div className="flex flex-col">
             <label className="text-xs font-bold text-gray-500 mb-1">DATE</label>
-            <input 
+            <input title="input"
               type="date" 
               className="bg-gray-50 border border-gray-200 p-3 rounded-lg outline-none font-medium text-gray-700"
               value={date} onChange={(e) => setDate(e.target.value)}
