@@ -17,17 +17,30 @@ interface Student {
 export default function AttendancePage() {
   const router = useRouter();
   
+  // Tab State: Toggle between marking attendance and viewing history
+  const [activeTab, setActiveTab] = useState<'entry' | 'history'>('entry');
+
+  // ==========================================
+  // STATE: TAKE ATTENDANCE (ENTRY)
+  // ==========================================
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Filters
   const [selectedClass, setSelectedClass] = useState('10th');
   const [selectedMedium, setSelectedMedium] = useState('English');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  // Attendance State: { studentId: "Present" | "Absent" }
   const [attendance, setAttendance] = useState<Record<string, string>>({});
-  
+
+  // ==========================================
+  // STATE: VIEW HISTORY
+  // ==========================================
+  const [historyClass, setHistoryClass] = useState('10th');
+  const [historyMedium, setHistoryMedium] = useState('English');
+  const [historyDate, setHistoryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [historyRecords, setHistoryRecords] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyFetched, setHistoryFetched] = useState(false);
+
+  // Fetch all students on load
   useEffect(() => {
     const fetchStudents = async () => {
       try {
@@ -40,7 +53,6 @@ export default function AttendancePage() {
           medium: doc.data().medium || 'English',
         })) as Student[];
         
-        // Sort by Roll No
         setStudents(studentList.sort((a, b) => Number(a.rollNo) - Number(b.rollNo)));
         setLoading(false);
       } catch (error) {
@@ -51,12 +63,12 @@ export default function AttendancePage() {
     fetchStudents();
   }, []);
 
-  // Filter students based on both Class AND Medium
+  // Filter for Entry Tab
   const classStudents = students.filter(
     s => s.stdClass === selectedClass && s.medium === selectedMedium
   );
 
-  // Mark all as present automatically when batch loads
+  // Auto-present logic for Entry Tab
   useEffect(() => {
     const defaultAtt: Record<string, string> = {};
     classStudents.forEach(s => {
@@ -100,132 +112,214 @@ export default function AttendancePage() {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-gray-50 flex justify-center items-center font-bold text-orange-500">Loading Attendance...</div>;
+  // ==========================================
+  // FUNCTION: FETCH HISTORY FROM FIREBASE
+  // ==========================================
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryFetched(false);
+    try {
+      const q = query(
+        collection(db, 'attendance'),
+        where('stdClass', '==', historyClass),
+        where('medium', '==', historyMedium),
+        where('date', '==', historyDate)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        // Assuming only one record per class/medium/date
+        const docData = querySnapshot.docs[0].data();
+        setHistoryRecords(docData.records || []);
+      } else {
+        setHistoryRecords([]);
+      }
+      setHistoryFetched(true);
+    } catch (error) {
+      console.error("Error fetching history: ", error);
+      alert("Failed to load history.");
+    }
+    setHistoryLoading(false);
+  };
+
+  if (loading) return <div className="min-h-screen bg-gray-50 flex justify-center items-center font-bold text-orange-500">Loading Portal...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-3 md:p-8 font-sans pb-28 text-gray-900">
       <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
         
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 shadow-sm gap-4">
-          <div className="flex items-center gap-3 w-full md:w-auto">
+        {/* HEADER & TABS SECTION */}
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center gap-3">
             <button onClick={() => router.push('/dashboard')} className="bg-gray-100 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-200 font-bold text-sm">
               ← Back
             </button>
             <h1 className="text-xl md:text-2xl font-bold text-gray-800">
-              📅 Attendance Entry
+              📅 Attendance Portal
             </h1>
           </div>
+
+          {/* Toggle Tabs */}
+          <div className="flex bg-gray-100 p-1 rounded-xl">
+            <button 
+              onClick={() => setActiveTab('entry')}
+              className={`flex-1 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'entry' ? 'bg-white shadow-sm text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              📝 Mark Attendance
+            </button>
+            <button 
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 py-3 rounded-lg font-bold text-sm transition-all ${activeTab === 'history' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              🕒 View History
+            </button>
+          </div>
         </div>
 
-        {/* CONTROLS (CLASS + MEDIUM + DATE) */}
-        <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          <div className="flex flex-col">
-            <label className="text-xs font-bold text-gray-500 mb-1">SELECT BATCH / CLASS</label>
-            <select title="select"
-              className="bg-gray-50 border border-gray-200 p-3 rounded-lg outline-none font-bold text-gray-700"
-              value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}
-            >
-              <option value="8th">8th Standard</option>
-              <option value="9th">9th Standard</option>
-              <option value="10th">10th Standard</option>
-              <option value="11th Sci">11th Science</option>
-              <option value="12th Sci">12th Science</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col">
-            <label className="text-xs font-bold text-blue-600 mb-1">SELECT MEDIUM</label>
-           <select title="select"
-              className="bg-blue-50 border border-blue-200 p-3 rounded-lg outline-none font-bold text-blue-800"
-              value={selectedMedium} onChange={(e) => setSelectedMedium(e.target.value)}
-            >
-              <option value="English">English Medium</option>
-              <option value="Semi">Semi-English</option>
-              <option value="Marathi">Marathi Medium</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col">
-            <label className="text-xs font-bold text-gray-500 mb-1">DATE</label>
-            <input title="input"
-              type="date" 
-              className="bg-gray-50 border border-gray-200 p-3 rounded-lg outline-none font-medium text-gray-700"
-              value={date} onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
-
-        </div>
-
-        {/* STUDENT LIST FOR ATTENDANCE (Mobile Friendly) */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-extrabold text-gray-700 text-sm">
-              Students: {selectedClass} ({selectedMedium})
-            </h3>
-            <span className="bg-orange-100 text-orange-700 font-bold px-3 py-1 rounded-full text-xs">
-              Total: {classStudents.length}
-            </span>
-          </div>
-
-          <div className="divide-y divide-gray-50">
-            {classStudents.length === 0 ? (
-              <div className="p-8 text-center text-gray-400 font-bold text-sm">
-                No students found in this specific batch & medium.
+        {/* ========================================================= */}
+        {/* TAB 1: MARK ATTENDANCE (Your Original Code) */}
+        {/* ========================================================= */}
+        {activeTab === 'entry' && (
+          <div className="space-y-4 md:space-y-6 animate-fade-in">
+            {/* CONTROLS */}
+            <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-gray-500 mb-1">SELECT BATCH</label>
+                <select title="Select Class" className="bg-gray-50 border border-gray-200 p-3 rounded-lg outline-none font-bold text-gray-700" value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
+                  <option value="8th">8th Standard</option>
+                  <option value="9th">9th Standard</option>
+                  <option value="10th">10th Standard</option>
+                  <option value="11th Sci">11th Science</option>
+                  <option value="12th Sci">12th Science</option>
+                </select>
               </div>
-            ) : (
-              classStudents.map((student) => (
-                <div key={student.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
-                  
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-500 shrink-0">
-                      {student.rollNo}
-                    </div>
-                    <div>
-                      <p className="font-extrabold text-gray-800">{student.name}</p>
-                      <p className="text-xs text-gray-400 font-medium">Roll No: {student.rollNo}</p>
-                    </div>
-                  </div>
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-orange-600 mb-1">SELECT MEDIUM</label>
+                <select title="Select Medium" className="bg-orange-50 border border-orange-200 p-3 rounded-lg outline-none font-bold text-orange-800" value={selectedMedium} onChange={(e) => setSelectedMedium(e.target.value)}>
+                  <option value="English">English Medium</option>
+                  <option value="Semi">Semi-English</option>
+                  <option value="Marathi">Marathi Medium</option>
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-gray-500 mb-1">DATE</label>
+                <input title="Select Date" type="date" className="bg-gray-50 border border-gray-200 p-3 rounded-lg outline-none font-medium text-gray-700" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+            </div>
 
-                  {/* Present/Absent Toggle Buttons */}
-                  <div className="flex bg-gray-100 p-1 rounded-lg shrink-0">
-                    <button
-                      onClick={() => handleStatusChange(student.id, 'Present')}
-                      className={`px-15 py-2 rounded-md text-xs font-bold transition-all ${
-                        attendance[student.id] === 'Present' 
-                          ? 'bg-green-500 text-white shadow-sm' 
-                          : 'text-gray-500 hover:bg-gray-200'
-                      }`}
-                    >
-                      Present
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(student.id, 'Absent')}
-                      className={`px-15 py-2 rounded-md text-xs font-bold transition-all ${
-                        attendance[student.id] === 'Absent' 
-                          ? 'bg-red-500 text-white shadow-sm' 
-                          : 'text-gray-500 hover:bg-gray-200'
-                      }`}
-                    >
-                      Absent
-                    </button>
-                  </div>
+            {/* STUDENT LIST */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                <h3 className="font-extrabold text-gray-700 text-sm">Students: {selectedClass} ({selectedMedium})</h3>
+                <span className="bg-orange-100 text-orange-700 font-bold px-3 py-1 rounded-full text-xs">Total: {classStudents.length}</span>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {classStudents.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400 font-bold text-sm">No students found.</div>
+                ) : (
+                  classStudents.map((student) => (
+                    <div key={student.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-500 shrink-0">{student.rollNo}</div>
+                        <div>
+                          <p className="font-extrabold text-gray-800">{student.name}</p>
+                        </div>
+                      </div>
+                      <div className="flex bg-gray-100 p-1 rounded-lg shrink-0">
+                        <button onClick={() => handleStatusChange(student.id, 'Present')} className={`px-4 py-2 rounded-md text-xs font-bold ${attendance[student.id] === 'Present' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>Present</button>
+                        <button onClick={() => handleStatusChange(student.id, 'Absent')} className={`px-4 py-2 rounded-md text-xs font-bold ${attendance[student.id] === 'Absent' ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>Absent</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
 
-                </div>
-              ))
+            <button onClick={submitAttendance} disabled={classStudents.length === 0} className="w-full mt-4 bg-orange-500 hover:bg-orange-600 py-4 rounded-xl font-bold text-white shadow-md disabled:opacity-50 transition-all text-base">
+              Save Attendance 💾
+            </button>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 2: VIEW HISTORY (App Format UI) */}
+        {/* ========================================================= */}
+        {activeTab === 'history' && (
+          <div className="space-y-4 md:space-y-6 animate-fade-in">
+            {/* HISTORY CONTROLS */}
+            <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-gray-500 mb-1">BATCH</label>
+                <select title="Select History Class" className="bg-gray-50 border border-gray-200 p-3 rounded-lg outline-none font-bold text-gray-700" value={historyClass} onChange={(e) => {setHistoryClass(e.target.value); setHistoryFetched(false);}}>
+                  <option value="8th">8th Standard</option>
+                  <option value="9th">9th Standard</option>
+                  <option value="10th">10th Standard</option>
+                  <option value="11th Sci">11th Science</option>
+                  <option value="12th Sci">12th Science</option>
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-blue-600 mb-1">MEDIUM</label>
+                <select title="Select History Medium" className="bg-blue-50 border border-blue-200 p-3 rounded-lg outline-none font-bold text-blue-800" value={historyMedium} onChange={(e) => {setHistoryMedium(e.target.value); setHistoryFetched(false);}}>
+                  <option value="English">English Medium</option>
+                  <option value="Semi">Semi-English</option>
+                  <option value="Marathi">Marathi Medium</option>
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-gray-500 mb-1">DATE</label>
+                <input title="Select History Date" type="date" className="bg-gray-50 border border-gray-200 p-3 rounded-lg outline-none font-medium text-gray-700" value={historyDate} onChange={(e) => {setHistoryDate(e.target.value); setHistoryFetched(false);}} />
+              </div>
+              <div className="flex flex-col justify-end">
+                <button onClick={fetchHistory} disabled={historyLoading} className="bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-lg shadow-sm disabled:opacity-50 transition-all h-[50px]">
+                  {historyLoading ? 'Loading...' : '🔍 Search'}
+                </button>
+              </div>
+            </div>
+
+            {/* HISTORY RESULTS - APP FORMAT */}
+            {historyFetched && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                {historyRecords.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400 font-bold text-sm">
+                    No attendance records found for this date.
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-gray-50 p-4 flex justify-between items-center border-b border-gray-100">
+                      <span className="font-extrabold text-gray-700 text-sm">Total Students: {historyRecords.length}</span>
+                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold text-xs shadow-sm">
+                        Present: {historyRecords.filter(s => s.status === 'Present').length}
+                      </span>
+                    </div>
+                    
+                    <div className="divide-y divide-gray-50">
+                      {historyRecords.map((student, idx) => (
+                        <div key={idx} className="p-4 flex justify-between items-center hover:bg-gray-50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex justify-center items-center font-extrabold shadow-sm">
+                              {student.rollNo}
+                            </div>
+                            <div>
+                              <h3 className="font-extrabold text-gray-800">{student.studentName}</h3>
+                            </div>
+                          </div>
+                          <div>
+                            <span className={`px-3 py-1 rounded-md text-xs font-bold shadow-sm ${
+                              student.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {student.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
-        </div>
-
-        {/* SUBMIT BUTTON */}
-        <button 
-          onClick={submitAttendance} 
-          disabled={classStudents.length === 0}
-          className="w-full mt-4 bg-orange-500 hover:bg-orange-600 py-4 rounded-xl font-bold text-white shadow-md disabled:opacity-50 transition-all text-base md:text-lg"
-        >
-          Save Attendance 💾
-        </button>
+        )}
 
       </div>
     </div>

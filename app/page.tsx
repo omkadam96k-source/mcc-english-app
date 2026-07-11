@@ -47,8 +47,9 @@ export default function LoginPage() {
           
           <div className="h-1.5 w-24 bg-gradient-to-r from-blue-400 to-emerald-300 rounded-full mb-6"></div>
           
+          {/* Hya line madhe error fix kela ahe */}
           <p className="text-xl text-gray-300 italic font-medium">
-            "Right Choice for the Bright Future"
+            &quot;Right Choice for the Bright Future&quot;
           </p>
         </div>
       </div>
