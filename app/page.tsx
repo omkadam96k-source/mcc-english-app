@@ -1,7 +1,7 @@
 'use client';
 
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth } from '../lib/firebase'; // तुझा पाथ बरोबर आहे ना ते चेक कर
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -17,10 +17,43 @@ export default function LoginPage() {
     }
   };
 
+  // 🚀 WhatsApp टेस्टिंग फंक्शन (फक्त टेस्टिंगसाठी)
+  const testWhatsAppMessage = async () => {
+    try {
+      alert("Sending message... Please wait ⏳");
+      
+      const response = await fetch('/api/send-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phoneNumber: "919529091766", // ⚠️ इथे तुझा खरा WhatsApp नंबर टाक (91 लावून)
+          date: "12/07/2026",
+          className: "10th Standard",
+          time: "10:30 AM"
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert("WhatsApp Message Sent Successfully! 🚀 मोबाईल चेक कर!");
+        console.log("Success Details:", data);
+      } else {
+        alert("Oops! Error: " + data.error);
+        console.error("Error Details:", data);
+      }
+    } catch (error) {
+      console.error("Fetch Error:", error);
+      alert("Something went wrong with the API call!");
+    }
+  };
+
   return (
     <div className="min-h-screen flex font-sans">
       
-      {/* LEFT PANEL - Branding (Fkt Laptop/PC var disel) */}
+      {/* LEFT PANEL - Branding */}
       <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 text-white flex-col justify-center items-start p-16 relative overflow-hidden">
         
         {/* Background Animations / Effects */}
@@ -47,7 +80,6 @@ export default function LoginPage() {
           
           <div className="h-1.5 w-24 bg-gradient-to-r from-blue-400 to-emerald-300 rounded-full mb-6"></div>
           
-          {/* Hya line madhe error fix kela ahe */}
           <p className="text-xl text-gray-300 italic font-medium">
             &quot;Right Choice for the Bright Future&quot;
           </p>
@@ -59,7 +91,7 @@ export default function LoginPage() {
         
         <div className="w-full max-w-md bg-white p-10 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 z-10">
           
-          {/* Mobile Header (Fkt Mobile var disel) */}
+          {/* Mobile Header */}
           <div className="md:hidden text-center mb-10">
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl shadow-sm border border-blue-100">
               🎓
@@ -88,6 +120,14 @@ export default function LoginPage() {
               </svg>
             </div>
             <span className="text-lg">Continue with Google</span>
+          </button>
+
+          {/* ⚠️ TESTING BUTTON ⚠️ - टेस्ट झाल्यावर हे काढून टाक */}
+          <button 
+            onClick={testWhatsAppMessage}
+            className="mt-6 w-full flex items-center justify-center gap-2 bg-green-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg hover:bg-green-600 transition-all hover:-translate-y-1"
+          >
+            <span className="text-lg">Send Test WhatsApp Message 🚀</span>
           </button>
 
           <div className="mt-12 text-center">

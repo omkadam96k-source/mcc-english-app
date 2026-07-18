@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
@@ -9,6 +11,8 @@ interface Student {
   id: string;
   stdClass: string;
   medium?: string; 
+  name?: string; 
+  parentPhone?: string; 
 }
 
 interface ClassStat {
@@ -22,6 +26,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [classStats, setClassStats] = useState<ClassStat[]>([]);
   const [totalStudents, setTotalStudents] = useState(0);
+  
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [presentStudentIds, setPresentStudentIds] = useState<Set<string>>(new Set());
+  const [sendingMessages, setSendingMessages] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const displayDate = new Date().toLocaleDateString('en-IN', {
@@ -30,6 +38,7 @@ export default function Dashboard() {
     month: 'long',
     year: 'numeric'
   });
+  const shortDate = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY for WhatsApp
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
@@ -38,23 +47,28 @@ export default function Dashboard() {
         const studentsList: Student[] = studentsSnap.docs.map(doc => ({
           id: doc.id,
           stdClass: doc.data().stdClass || 'Unknown',
-          medium: doc.data().medium || 'English' 
+          medium: doc.data().medium || 'English',
+          name: doc.data().name || 'Student', 
+          parentPhone: doc.data().parentPhone || '919876543210' 
         }));
 
+        setAllStudents(studentsList);
         setTotalStudents(studentsList.length);
 
         const attQuery = query(collection(db, 'attendance'), where('date', '==', todayStr));
         const attSnap = await getDocs(attQuery);
         
-        const presentStudentIds = new Set<string>();
+        const presentIds = new Set<string>();
         attSnap.docs.forEach(doc => {
           const records = doc.data().records || [];
-          records.forEach((record: any) => {
+          records.forEach((record: { studentId: string; status: string }) => {
             if (record.status === 'Present') {
-              presentStudentIds.add(record.studentId);
+              presentIds.add(record.studentId);
             }
           });
         });
+        
+        setPresentStudentIds(presentIds);
 
         const statsMap = new Map<string, { total: number; present: number }>();
 
@@ -67,7 +81,7 @@ export default function Dashboard() {
           
           const current = statsMap.get(label)!;
           current.total += 1;
-          if (presentStudentIds.has(student.id)) {
+          if (presentIds.has(student.id)) {
             current.present += 1;
           }
         });
@@ -88,6 +102,59 @@ export default function Dashboard() {
     
     fetchDashboardStats();
   }, [todayStr]);
+
+  // 🚀 WhatsApp मेसेज पाठवण्याची फंक्शन
+  const sendWhatsAppNotifications = async () => {
+    if (presentStudentIds.size === 0) {
+      alert("आज कोणीही विद्यार्थी Present नाहीये! मेसेज पाठवता येणार नाही.");
+      return;
+    }
+
+    const confirmSend = confirm(`आज एकूण ${presentStudentIds.size} विद्यार्थी Present आहेत. सगळ्यांना WhatsApp मेसेज पाठवायचा का?`);
+    if (!confirmSend) return;
+
+    setSendingMessages(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const id of presentStudentIds) {
+      const student = allStudents.find(s => s.id === id);
+      
+      if (student && student.parentPhone) {
+        try {
+          const response = await fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phoneNumber: student.parentPhone, 
+              date: shortDate,
+              studentName: student.name || "Student", // 🟢 Ithe nav add kela ahe
+              status: "Present"                       // 🟢 Ithe status add kela ahe
+            }),
+          });
+
+          const data = await response.json();
+          if (response.ok && data.success) {
+            successCount++;
+          } else {
+            failCount++;
+            console.error(`Meta API Error for ${student.name}:`, data.error);
+          }
+        } catch (error) {
+          failCount++;
+          console.error(`Error sending to ${student?.name}:`, error);
+        }
+      }
+    }
+
+    setSendingMessages(false);
+    
+    if (failCount > 0) {
+      alert(`⚠️ ${successCount} पालकांना मेसेज गेला, पण ${failCount} मेसेज FAIL झाले. (कृपया VS Code चं टर्मिनल तपासा)`);
+    } else {
+      alert(`Done! 🚀 ${successCount} पालकांना WhatsApp वर Present चा मेसेज गेला आहे.`);
+    }
+  };
 
   if (loading) {
     return (
@@ -113,20 +180,43 @@ export default function Dashboard() {
 
       {/* 🔹 CUSTOM HEADER WITH LOGO & QUOTE */}
       <div className="bg-white px-4 py-6 md:px-8 border-b border-gray-200 shadow-sm rounded-b-3xl mb-6">
-        <div className="max-w-5xl mx-auto flex items-center gap-4">
-          <div className="w-16 h-16 md:w-20 md:h-20 shrink-0 rounded-full overflow-hidden border-2 border-purple-100 shadow-sm bg-black flex items-center justify-center">
-            <img src="/icon.jpg" alt="MCC Logo" className="w-full h-full object-contain" />
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 md:w-20 md:h-20 shrink-0 rounded-full overflow-hidden border-2 border-purple-100 shadow-sm bg-black flex items-center justify-center">
+              <img src="/icon.jpg" alt="MCC Logo" className="w-full h-full object-contain" />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
+                Matoshree Coaching Classes
+              </h1>
+              <p className="text-purple-600 font-bold text-xs md:text-sm mt-1 italic">
+                &quot;Right Choice for Bright Future&quot;
+              </p>
+            </div>
           </div>
           
-          <div>
-            <h1 className="text-xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
-              Matoshree Coaching Classes
-            </h1>
-            <p className="text-purple-600 font-bold text-xs md:text-sm mt-1 italic">
-              "Right Choice for Bright Future"
-            </p>
-          </div>
+          {/* 🟢 WHATSAPP NOTIFICATION BUTTON 🟢 */}
+          <button 
+            onClick={sendWhatsAppNotifications}
+            disabled={sendingMessages}
+            className={`hidden md:flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-white shadow-lg transition-all ${
+              sendingMessages ? 'bg-green-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 hover:-translate-y-1'
+            }`}
+          >
+            {sendingMessages ? 'Sending... ⏳' : 'Notify Parents (WhatsApp) 🚀'}
+          </button>
         </div>
+
+        {/* Mobile WhatsApp Button */}
+        <button 
+          onClick={sendWhatsAppNotifications}
+          disabled={sendingMessages}
+          className={`md:hidden mt-4 w-full flex justify-center items-center gap-2 px-6 py-3 rounded-xl font-bold text-white shadow-lg transition-all ${
+            sendingMessages ? 'bg-green-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'
+          }`}
+        >
+          {sendingMessages ? 'Sending Messages... ⏳' : 'Send WhatsApp Updates 🚀'}
+        </button>
       </div>
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 space-y-6">
@@ -145,7 +235,7 @@ export default function Dashboard() {
 
         {/* CLASS-WISE ATTENDANCE STATS */}
         <div>
-          <h3 className="text-gray-800 font-bold text-sm mb-3 px-1">TODAY'S ATTENDANCE SUMMARY</h3>
+          <h3 className="text-gray-800 font-bold text-sm mb-3 px-1">TODAY&apos;S ATTENDANCE SUMMARY</h3>
           
           {classStats.length === 0 ? (
             <div className="bg-white p-6 rounded-2xl border border-gray-100 text-center shadow-sm">
